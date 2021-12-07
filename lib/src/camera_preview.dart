@@ -4,12 +4,12 @@ import 'camera_args.dart';
 import 'camera_controller.dart';
 
 /// A widget showing a live camera preview.
-class CameraView extends StatelessWidget {
+class CameraPreview extends StatelessWidget {
   /// The controller of the camera.
   final CameraController controller;
 
-  /// Create a [CameraView] with a [controller], the [controller] must has been initialized.
-  CameraView(this.controller);
+  /// Create a [CameraPreview] with a [controller], the [controller] must has been initialized.
+  CameraPreview(this.controller);
 
   @override
   Widget build(BuildContext context) {

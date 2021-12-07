@@ -44,7 +44,7 @@ class _CaptureViewState extends State<CaptureView> {
       body: Stack(
         children: [
           Container(color: Colors.blue),
-          CameraView(cameraController),
+          CameraPreview(cameraController),
           Align(
             alignment: Alignment.bottomCenter,
             child: Card(

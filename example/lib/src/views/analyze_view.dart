@@ -29,7 +29,7 @@ class _AnalyzeViewState extends State<AnalyzeView> with SingleTickerProviderStat
     return Scaffold(
       body: Stack(
         children: [
-          CameraView(cameraController),
+          CameraPreview(cameraController),
           AnimatedLine(
             offsetAnimation: offsetAnimation,
             opacityAnimation: opacityAnimation,
