@@ -1,11 +1,17 @@
 import 'dart:async';
 
+import 'package:camerax/src/capture_mode.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'barcode.dart';
 import 'camera_args.dart';
+import 'camera_exception.dart';
 import 'camera_facing.dart';
+import 'camera_type.dart';
+import 'flash_mode.dart';
+import 'resolution_preset.dart';
 import 'torch_state.dart';
 import 'util.dart';
 
@@ -18,15 +24,23 @@ abstract class CameraController {
   ValueNotifier<TorchState> get torchState;
 
   /// A stream of barcodes.
-  Stream<Barcode> get barcodes;
+  Stream<Barcode>? get barcodes;
+
+  FlashMode get flashMode;
 
   /// Create a [CameraController].
   ///
   /// [facing] target facing used to select camera.
   ///
   /// [formats] the barcode formats for image analyzer.
-  factory CameraController([CameraFacing facing = CameraFacing.back]) =>
-      _CameraController(facing);
+  factory CameraController({
+    required CameraType cameraType,
+    CameraLensDirection facing = CameraLensDirection.back,
+    ResolutionPreset resolutionPreset = ResolutionPreset.max,
+    CaptureMode captureMode = CaptureMode.maxQuality,
+    FlashMode? flashMode,
+  }) =>
+      _CameraController(facing, cameraType, resolutionPreset, captureMode, flashMode);
 
   /// Start the camera asynchronously.
   Future<void> startAsync();
@@ -36,13 +50,17 @@ abstract class CameraController {
 
   /// Release the resources of the camera.
   void dispose();
+
+  Future<bool> isTakingPicture();
+
+  Future<String> takePicture();
+
+  Future<void> setFlashMode(FlashMode mode);
 }
 
 class _CameraController implements CameraController {
-  static const MethodChannel method =
-      MethodChannel('yanshouwang.dev/camerax/method');
-  static const EventChannel event =
-      EventChannel('yanshouwang.dev/camerax/event');
+  static const MethodChannel method = MethodChannel('yanshouwang.dev/camerax/method');
+  static const EventChannel event = EventChannel('yanshouwang.dev/camerax/event');
 
   static const undetermined = 0;
   static const authorized = 1;
@@ -54,20 +72,34 @@ class _CameraController implements CameraController {
   static int? id;
   static StreamSubscription? subscription;
 
-  final CameraFacing facing;
+  final CameraLensDirection facing;
+  final CameraType cameraType;
+  final CaptureMode captureMode;
+  final ResolutionPreset resolutionPreset;
+  FlashMode? _flashMode;
+
+  @override
+  FlashMode get flashMode => _flashMode ?? FlashMode.auto;
+
   @override
   final ValueNotifier<CameraArgs?> args;
   @override
   final ValueNotifier<TorchState> torchState;
 
   bool torchable;
-  late StreamController<Barcode> barcodesController;
+  bool _isTakingPicture = false;
+  late StreamController<Barcode>? barcodesController;
 
   @override
-  Stream<Barcode> get barcodes => barcodesController.stream;
+  Stream<Barcode>? get barcodes => barcodesController?.stream;
 
-  _CameraController(this.facing)
-      : args = ValueNotifier(null),
+  _CameraController(
+    this.facing,
+    this.cameraType,
+    this.resolutionPreset,
+    this.captureMode,
+    this._flashMode,
+  )   : args = ValueNotifier(null),
         torchState = ValueNotifier(TorchState.off),
         torchable = false {
     // In case new instance before dispose.
@@ -75,14 +107,21 @@ class _CameraController implements CameraController {
       stop();
     }
     id = hashCode;
+
+    if (cameraType == CameraType.barcode) {
+      // Create barcode stream controller.
+      initBarcodeStream();
+    }
+  }
+
+  void initBarcodeStream() {
     // Create barcode stream controller.
     barcodesController = StreamController.broadcast(
       onListen: () => tryAnalyze(analyze_barcode),
       onCancel: () => tryAnalyze(analyze_none),
     );
     // Listen event handler.
-    subscription =
-        event.receiveBroadcastStream().listen((data) => handleEvent(data));
+    subscription = event.receiveBroadcastStream().listen((data) => handleEvent(data));
   }
 
   void handleEvent(Map<dynamic, dynamic> event) {
@@ -95,7 +134,7 @@ class _CameraController implements CameraController {
         break;
       case 'barcode':
         final barcode = Barcode.fromNative(data);
-        barcodesController.add(barcode);
+        barcodesController?.add(barcode);
         break;
       default:
         throw UnimplementedError();
@@ -122,8 +161,13 @@ class _CameraController implements CameraController {
       throw PlatformException(code: 'NO ACCESS');
     }
     // Start camera.
-    final answer =
-        await method.invokeMapMethod<String, dynamic>('start', facing.index);
+    final answer = await method.invokeMapMethod<String, dynamic>('start', {
+      'camera_index': facing.index,
+      'camera_type': cameraType.index,
+      'camera_resolution': resolutionPreset.index,
+      'camera_capture_mode': captureMode.index,
+      'camera_flash_mode': flashMode.index,
+    });
     final textureId = answer?['textureId'];
     final size = toSize(answer?['size']);
     args.value = CameraArgs(textureId, size);
@@ -136,8 +180,7 @@ class _CameraController implements CameraController {
     if (!torchable) {
       return;
     }
-    var state =
-        torchState.value == TorchState.off ? TorchState.on : TorchState.off;
+    var state = torchState.value == TorchState.off ? TorchState.on : TorchState.off;
     method.invokeMethod('torch', state.index);
   }
 
@@ -149,15 +192,48 @@ class _CameraController implements CameraController {
       subscription = null;
       id = null;
     }
-    barcodesController.close();
+    barcodesController?.close();
   }
 
   void stop() => method.invokeMethod('stop');
 
   void ensure(String name) {
-    final message =
-        'CameraController.$name called after CameraController.dispose\n'
+    final message = 'CameraController.$name called after CameraController.dispose\n'
         'CameraController methods should not be used after calling dispose.';
     assert(hashCode == id, message);
+  }
+
+  @override
+  Future<void> setFlashMode(FlashMode mode) async {
+    try {
+      await method.invokeMethod('flash', mode.index);
+      _flashMode = mode;
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  @override
+  Future<String> takePicture() async {
+    if (_isTakingPicture) {
+      throw CameraException(
+        'Previous capture has not returned yet.',
+        'takePicture was called before the previous capture returned.',
+      );
+    }
+    try {
+      _isTakingPicture = true;
+      var result = await method.invokeMethod('capture');
+      _isTakingPicture = false;
+      return result['path'];
+    } on PlatformException catch (e) {
+      _isTakingPicture = false;
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  @override
+  Future<bool> isTakingPicture() async {
+    return _isTakingPicture;
   }
 }

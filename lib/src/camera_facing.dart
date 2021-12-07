@@ -1,5 +1,5 @@
 /// The facing of a camera.
-enum CameraFacing {
+enum CameraLensDirection {
   /// Front facing camera.
   front,
 
