@@ -11,9 +11,8 @@ class HomeView extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(40.0),
           child: Text(
-            'Click the camera button at bottom to start scan:)',
+            'Use the:\n- camera button to take picture\n- qr code button to scan',
             style: TextStyle(fontSize: 20.0),
-            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -23,25 +22,20 @@ class HomeView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: Icon(Icons.home),
-              onPressed: () {},
+              onPressed: () => Navigator.of(context).pushNamed('capture'),
+              icon: Icon(
+                Icons.camera,
+              ),
             ),
             IconButton(
-              icon: Icon(Icons.person),
-              onPressed: () {},
+              onPressed: () => Navigator.of(context).pushNamed('analyze'),
+              icon: Icon(
+                Icons.qr_code,
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.orange,
-        onPressed: () => Navigator.of(context).pushNamed('analyze'),
-        child: Icon(
-          Icons.camera,
-          color: Colors.white,
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }

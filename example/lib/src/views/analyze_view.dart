@@ -6,8 +6,7 @@ class AnalyzeView extends StatefulWidget {
   _AnalyzeViewState createState() => _AnalyzeViewState();
 }
 
-class _AnalyzeViewState extends State<AnalyzeView>
-    with SingleTickerProviderStateMixin {
+class _AnalyzeViewState extends State<AnalyzeView> with SingleTickerProviderStateMixin {
   late CameraController cameraController;
   late AnimationController animationConrtroller;
   late Animation<double> offsetAnimation;
@@ -16,12 +15,10 @@ class _AnalyzeViewState extends State<AnalyzeView>
   @override
   void initState() {
     super.initState();
-    cameraController = CameraController();
-    animationConrtroller =
-        AnimationController(duration: Duration(seconds: 2), vsync: this);
+    cameraController = CameraController(cameraType: CameraType.barcode);
+    animationConrtroller = AnimationController(duration: Duration(seconds: 2), vsync: this);
     offsetAnimation = Tween(begin: 0.2, end: 0.8).animate(animationConrtroller);
-    opacityAnimation =
-        CurvedAnimation(parent: animationConrtroller, curve: OpacityCurve());
+    opacityAnimation = CurvedAnimation(parent: animationConrtroller, curve: OpacityCurve());
     animationConrtroller.repeat();
 
     start();
@@ -52,8 +49,7 @@ class _AnalyzeViewState extends State<AnalyzeView>
               icon: ValueListenableBuilder(
                 valueListenable: cameraController.torchState,
                 builder: (context, state, child) {
-                  final color =
-                      state == TorchState.off ? Colors.grey : Colors.white;
+                  final color = state == TorchState.off ? Colors.grey : Colors.white;
                   return Icon(Icons.bolt, color: color);
                 },
               ),
@@ -76,8 +72,8 @@ class _AnalyzeViewState extends State<AnalyzeView>
   void start() async {
     await cameraController.startAsync();
     try {
-      final barcode = await cameraController.barcodes.first;
-      display(barcode);
+      final barcode = await cameraController.barcodes?.first;
+      if (barcode != null) display(barcode);
     } catch (e) {
       print(e);
     }
@@ -105,8 +101,7 @@ class AnimatedLine extends AnimatedWidget {
   final Animation offsetAnimation;
   final Animation opacityAnimation;
 
-  AnimatedLine(
-      {Key? key, required this.offsetAnimation, required this.opacityAnimation})
+  AnimatedLine({Key? key, required this.offsetAnimation, required this.opacityAnimation})
       : super(key: key, listenable: offsetAnimation);
 
   @override

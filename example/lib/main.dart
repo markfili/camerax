@@ -23,6 +23,8 @@ class MyApp extends StatelessWidget {
       routes: {
         'analyze': (context) => AnalyzeView(),
         'display': (context) => DisplayView(),
+        'capture': (context) => CaptureView(),
+        'preview': (context) => PreviewView(),
       },
     );
   }
