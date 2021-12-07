@@ -152,6 +152,9 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             } else if (type == "picture") {
                 setupPictureCapturing(position, result)
             }
+            
+            captureDevice.addObserver(self, forKeyPath: #keyPath(AVCaptureDevice.torchMode), options: .new, context: nil)
+            
             textureId = registry.register(self)
             registry.textureFrameAvailable(textureId)
             
@@ -167,9 +170,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     }
     
     private func setupBarcodeCapturing(_ position: AVCaptureDevice.Position, _ result: @escaping FlutterResult) {
-        
         setupDevice(position)
-        captureDevice.addObserver(self, forKeyPath: #keyPath(AVCaptureDevice.torchMode), options: .new, context: nil)
         
         captureSession = AVCaptureSession()
         captureSession.beginConfiguration()
