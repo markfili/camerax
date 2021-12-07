@@ -24,7 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 enum class ResolutionPreset(val value: Int) {
-    LOW(5), MEDIUM(4), HIGH(3), VERY_HIGH(2), ULTRA_HIGH(1), MAX(0);
+    LOW(0), MEDIUM(1), HIGH(2), VERY_HIGH(3), ULTRA_HIGH(4), MAX(5);
 
     companion object {
         fun fromInt(value: Int) = values().first { it.value == value }
@@ -324,11 +324,11 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun targetResolution(raw: ResolutionPreset): Size {
         return when (raw) {
             ResolutionPreset.MAX,
-            ResolutionPreset.ULTRA_HIGH -> Size(3840, 2160)
-            ResolutionPreset.VERY_HIGH -> Size(1920, 1080)
-            ResolutionPreset.HIGH -> Size(1280, 720)
-            ResolutionPreset.MEDIUM -> Size(640, 480)
-            else -> Size(352, 288)
+            ResolutionPreset.ULTRA_HIGH -> Size(2160, 3840)
+            ResolutionPreset.VERY_HIGH -> Size(1080, 1920)
+            ResolutionPreset.HIGH -> Size(720, 1280)
+            ResolutionPreset.MEDIUM -> Size(480, 640)
+            else -> Size(288, 352)
         }
     }
 
