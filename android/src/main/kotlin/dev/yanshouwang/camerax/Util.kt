@@ -5,6 +5,10 @@ import androidx.camera.core.Camera
 import androidx.camera.core.ImageProxy
 import com.google.mlkit.vision.barcode.Barcode
 
+enum class CameraType {
+    PICTURE, BARCODE
+}
+
 val Any.TAG: String
     get() = javaClass.simpleName
 
