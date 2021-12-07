@@ -88,7 +88,7 @@ class _CameraController implements CameraController {
 
   bool torchable;
   bool _isTakingPicture = false;
-  late StreamController<Barcode>? barcodesController;
+  StreamController<Barcode>? barcodesController;
 
   @override
   Stream<Barcode>? get barcodes => barcodesController?.stream;
