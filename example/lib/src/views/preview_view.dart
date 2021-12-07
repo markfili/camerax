@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'app_bar.dart';
+
 class PreviewView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -9,12 +11,7 @@ class PreviewView extends StatelessWidget {
     var image = File(args);
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 1,
-        automaticallyImplyLeading: true,
-        title: Text('Preview'),
-      ),
+      appBar: ExampleAppBar(title: 'Preview'),
       body: Stack(
         fit: StackFit.expand,
         children: [

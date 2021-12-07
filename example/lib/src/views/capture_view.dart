@@ -2,6 +2,8 @@ import 'package:camerax/camerax.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'app_bar.dart';
+
 class CaptureView extends StatefulWidget {
   const CaptureView({Key? key}) : super(key: key);
 
@@ -37,6 +39,8 @@ class _CaptureViewState extends State<CaptureView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: ExampleAppBar(title: 'Capture'),
       body: Stack(
         children: [
           Container(color: Colors.blue),
@@ -113,7 +117,7 @@ class _CaptureViewState extends State<CaptureView> {
 
   int _currentFlashModeIndex() {
     var currentMode = cameraController.flashMode;
-    var index =  flashModeIcons.indexWhere((e) => e.flashMode == currentMode);
+    var index = flashModeIcons.indexWhere((e) => e.flashMode == currentMode);
     print('$currentMode is on $index');
     return index;
   }
