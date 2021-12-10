@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:camerax/src/capture_mode.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'barcode.dart';
@@ -12,6 +13,7 @@ import 'camera_facing.dart';
 import 'camera_type.dart';
 import 'flash_mode.dart';
 import 'resolution_preset.dart';
+import 'rotation.dart';
 import 'torch_state.dart';
 import 'util.dart';
 
@@ -40,7 +42,7 @@ abstract class CameraController {
     CaptureMode captureMode = CaptureMode.maxQuality,
     FlashMode? flashMode,
   }) =>
-      _CameraController(facing, cameraType, resolutionPreset, captureMode, flashMode);
+      _CameraController(facing, cameraType, resolutionPreset, Rotation.rotationUnset, captureMode, flashMode);
 
   /// Start the camera asynchronously.
   Future<void> startAsync();
@@ -62,6 +64,13 @@ class _CameraController implements CameraController {
   static const MethodChannel method = MethodChannel('yanshouwang.dev/camerax/method');
   static const EventChannel event = EventChannel('yanshouwang.dev/camerax/event');
 
+  static const String CAMERA_INDEX = 'camera_index';
+  static const String CAMERA_TYPE = 'camera_type';
+  static const String CAMERA_RESOLUTION = 'camera_resolution';
+  static const String CAMERA_ROTATION = 'camera_rotation';
+  static const String CAMERA_CAPTURE_MODE = 'camera_capture_mode';
+  static const String CAMERA_FLASH_MODE = 'camera_flash_mode';
+
   static const undetermined = 0;
   static const authorized = 1;
   static const denied = 2;
@@ -72,10 +81,11 @@ class _CameraController implements CameraController {
   static int? id;
   static StreamSubscription? subscription;
 
-  final CameraLensDirection facing;
+  final CameraLensDirection cameraLensDirection;
   final CameraType cameraType;
   final CaptureMode captureMode;
   final ResolutionPreset resolutionPreset;
+  final Rotation rotation;
   FlashMode? _flashMode;
 
   @override
@@ -94,9 +104,10 @@ class _CameraController implements CameraController {
   Stream<Barcode>? get barcodes => barcodesController?.stream;
 
   _CameraController(
-    this.facing,
+    this.cameraLensDirection,
     this.cameraType,
     this.resolutionPreset,
+    this.rotation,
     this.captureMode,
     this._flashMode,
   )   : args = ValueNotifier(null),
@@ -158,20 +169,25 @@ class _CameraController implements CameraController {
       state = result ? authorized : denied;
     }
     if (state != authorized) {
-      throw PlatformException(code: 'NO ACCESS');
+      throw CameraException('Camera access denied', 'Unauthorized access to camera, check app permission settings');
     }
     // Start camera.
-    final answer = await method.invokeMapMethod<String, dynamic>('start', {
-      'camera_index': facing.index,
-      'camera_type': cameraType.index,
-      'camera_resolution': resolutionPreset.index,
-      'camera_capture_mode': captureMode.index,
-      'camera_flash_mode': flashMode.index,
-    });
-    final textureId = answer?['textureId'];
-    final size = toSize(answer?['size']);
-    args.value = CameraArgs(textureId, size);
-    torchable = answer?['torchable'];
+    try {
+      final answer = await method.invokeMapMethod<String, dynamic>('start', {
+        CAMERA_INDEX: cameraLensDirection.index,
+        CAMERA_TYPE: cameraType.index,
+        CAMERA_RESOLUTION: resolutionPreset.index,
+        CAMERA_ROTATION: rotation.index,
+        CAMERA_CAPTURE_MODE: captureMode.index,
+        CAMERA_FLASH_MODE: flashMode.index,
+      });
+      final textureId = answer?['textureId'];
+      final size = toSize(answer?['size']);
+      args.value = CameraArgs(textureId, size);
+      torchable = answer?['torchable'];
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
   }
 
   @override

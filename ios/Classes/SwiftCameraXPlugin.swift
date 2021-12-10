@@ -4,20 +4,33 @@ import MLKitVision
 import MLKitBarcodeScanning
 import UIKit
 
-enum ResolutionPreset {
-    case veryLow
-    case low
-    case medium
-    case high
-    case veryHigh
-    case ultraHigh
-    case max
+enum ResolutionPreset : Int {
+    case low = 0
+    case medium = 1
+    case high = 2
+    case veryHigh = 3
+    case ultraHigh = 4
+    case max = 5
+    
+    init(fromRawValue: Int) {
+        self = ResolutionPreset(rawValue: fromRawValue) ?? .max
+    }
+}
+
+enum CameraType : String {
+    case picture = "picture"
+    case barcode = "barcode"
 }
 
 public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     private let IMAGE_FILE_EXTENSION = ".jpg"
     private let IMAGE_FILE_NAME_DATE_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+    
+    private let CAMERA_INDEX = "camera_index"
+    private let CAMERA_TYPE = "camera_type"
+    private let CAMERA_RESOLUTION = "camera_resolution"
+    private let CAMERA_FLASH_MODE = "camera_flash_mode"
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = SwiftCameraXPlugin(registrar.textures())
@@ -135,52 +148,48 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     
     func startNative(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
         if let args = call.arguments as? Dictionary<String, Any>,
-           let cameraType = args["camera_type"] as? Int,
-           let cameraFacing = args["camera_index"] as? Int {
-            if let flashMode = args["camera_flash_mode"] as? Int {
-                self.flashMode = flashModeRawToAVCaptureFlashMode(flashMode)
-            }
-            if let resolutionPresetRaw = args["camera_resolution"] as? Int {
-                let resolutionPresetEnum = resolutionPresetRawToResolutionPreset(resolutionPresetRaw)
-                self.resolutionPreset = resolutionPresetToAVCaptureSessionPreset(resolutionPresetEnum)
-            }
-            let position = cameraFacing == 0 ? AVCaptureDevice.Position.front : .back
-            let type = cameraType == 0 ? "picture" : "barcode"
-            
-            if (type == "barcode") {
-                setupBarcodeCapturing(position, result)
-            } else if (type == "picture") {
-                setupPictureCapturing(position, result)
+           let type = (args[CAMERA_TYPE] as? Int).map({$0 == 0 ? CameraType.picture : .barcode}),
+           let position = (args[CAMERA_INDEX] as? Int).map({$0 == 0 ? AVCaptureDevice.Position.front : .back}) {
+            if let flashMode = args[CAMERA_FLASH_MODE] as? Int {
+                self.flashMode = mapFlashMode(flashMode)
             }
             
-            captureDevice.addObserver(self, forKeyPath: #keyPath(AVCaptureDevice.torchMode), options: .new, context: nil)
+            if let resolutionPreset = args[CAMERA_RESOLUTION] as? Int {
+                self.resolutionPreset = mapResolutionPreset(resolutionPreset)
+            }
+            
+            setupDevice(position, result)
+            
+            switch (type) {
+            case .barcode:
+                setupBarcodeCapturing(result)
+            case .picture:
+                setupPictureCapturing(result)
+            }
             
             textureId = registry.register(self)
             registry.textureFrameAvailable(textureId)
             
-            let dimensions = CMVideoFormatDescriptionGetDimensions(captureDevice.activeFormat.formatDescription)
-            let width = Double(dimensions.height)
-            let height = Double(dimensions.width)
-            let size = ["width": width, "height": height]
-            let answer: [String : Any?] = ["textureId": textureId, "size": size, "torchable": captureDevice.hasTorch]
-            result(answer)
+            respondWithDeviceInfo(result)
         } else {
             result(FlutterError.init(code: "Missing init values", message: "Need to set camera_type and camera_facing values", details: nil))
         }
     }
     
-    private func setupBarcodeCapturing(_ position: AVCaptureDevice.Position, _ result: @escaping FlutterResult) {
-        setupDevice(position)
-        
+    private func respondWithDeviceInfo(_ result: FlutterResult) {
+        let dimensions = CMVideoFormatDescriptionGetDimensions(captureDevice.activeFormat.formatDescription)
+        let width = Double(dimensions.height)
+        let height = Double(dimensions.width)
+        let size = ["width": width, "height": height]
+        let answer: [String : Any?] = ["textureId": textureId, "size": size, "torchable": captureDevice.hasTorch]
+        result(answer)
+    }
+    
+    private func setupBarcodeCapturing(_ result: @escaping FlutterResult) {
         captureSession = AVCaptureSession()
         captureSession.beginConfiguration()
         
-        if (resolutionPreset != nil && captureSession.canSetSessionPreset(resolutionPreset)) {
-            if (resolutionPreset == .high && captureSession.canSetSessionPreset(.hd4K3840x2160)) {
-                resolutionPreset = .hd4K3840x2160
-            }
-            captureSession.sessionPreset = resolutionPreset
-        }
+        setupResolution()
         
         // Add device input.
         do {
@@ -198,7 +207,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         captureSession.addOutput(videoOutput)
         for connection in videoOutput.connections {
             connection.videoOrientation = .portrait
-            if position == .front && connection.isVideoMirroringSupported {
+            if captureDevice.position == .front && connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = true
             }
         }
@@ -206,8 +215,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         captureSession.startRunning()
     }
     
-    private func setupPictureCapturing(_ position: AVCaptureDevice.Position, _ result: @escaping FlutterResult) {
-        setupDevice(position)
+    private func setupPictureCapturing(_ result: @escaping FlutterResult) {
         if (captureDevice != nil) {
             do {
                 let input = try AVCaptureDeviceInput(device: captureDevice)
@@ -217,11 +225,12 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
                 videoOutput.alwaysDiscardsLateVideoFrames = true
                 videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue.main)
                 
-                
                 captureSession = AVCaptureSession()
                 captureSession.beginConfiguration()
                 captureSession.addInputWithNoConnections(input)
                 captureSession.addOutputWithNoConnections(videoOutput)
+                
+                setupResolution()
                 
                 let connection = AVCaptureConnection(inputPorts: input.ports, output: videoOutput)
                 connection.videoOrientation = .portrait
@@ -238,17 +247,31 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             } catch {
                 error.throwNative(result)
             }
-        } else {
-            print("No device found for position: \(position.rawValue)")
         }
     }
     
-    private func setupDevice(_ position: AVCaptureDevice.Position) {
+    private func setupResolution() {
+        if resolutionPreset != nil &&
+            captureDevice != nil &&
+            captureSession.canSetSessionPreset(resolutionPreset) {
+            if resolutionPreset == .high &&
+                captureSession.canSetSessionPreset(.hd4K3840x2160) {
+                resolutionPreset = .hd4K3840x2160
+            }
+            captureSession.sessionPreset = resolutionPreset
+        }
+    }
+    
+    private func setupDevice(_ position: AVCaptureDevice.Position, _ result: FlutterResult) {
         if #available(iOS 10.0, *) {
             captureDevice = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: position).devices.first
         } else {
             captureDevice = AVCaptureDevice.devices(for: .video).filter({$0.position == position}).first
         }
+        if captureDevice == nil {
+            result(FlutterError(code: "Capture device unavailable", message: "Unable to initialize a capture device", details: nil))
+        }
+        captureDevice.addObserver(self, forKeyPath: #keyPath(AVCaptureDevice.torchMode), options: .new, context: nil)
     }
     
     func torchNative(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -289,56 +312,35 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     
     private func flashModeNative(_ call: FlutterMethodCall, _ result: FlutterResult) {
         let rawFlashMode = call.arguments as! Int
-        flashMode = flashModeRawToAVCaptureFlashMode(rawFlashMode)
+        flashMode = mapFlashMode(rawFlashMode)
         result(nil)
     }
     
-    private func flashModeRawToAVCaptureFlashMode(_ rawMode: Int) -> AVCaptureDevice.FlashMode {
+    private func mapFlashMode(_ rawMode: Int) -> AVCaptureDevice.FlashMode {
         switch (rawMode) {
-            case 0: return .off
-            case 1: return .on
-            default: return .auto
+        case 0: return .off
+        case 1: return .on
+        default: return .auto
         }
     }
     
-    private func resolutionPresetRawToResolutionPreset(_ raw: Int) -> ResolutionPreset {
-        switch (raw) {
-            case 0:
-              return .low
-            case 1:
-              return .medium
-            case 2:
-              return .high
-            case 3:
-              return .veryHigh
-            case 4:
-              return .ultraHigh
-            default:
-              return .max
+    private func mapResolutionPreset(_ rawMode: Int) -> AVCaptureSession.Preset {
+        switch (ResolutionPreset(fromRawValue: rawMode)) {
+        case .max:
+            fallthrough
+        case .ultraHigh:
+            return AVCaptureSession.Preset.high
+        case .veryHigh:
+            return AVCaptureSession.Preset.hd1920x1080
+        case .high:
+            return AVCaptureSession.Preset.hd1280x720
+        case .medium:
+            return AVCaptureSession.Preset.vga640x480
+        case .low:
+            return AVCaptureSession.Preset.cif352x288
         }
     }
     
-    private func resolutionPresetToAVCaptureSessionPreset(_ resolutionPreset: ResolutionPreset) -> AVCaptureSession.Preset {
-        var preset: AVCaptureSession.Preset = AVCaptureSession.Preset.low
-        switch (resolutionPreset) {
-            case .max:
-               fallthrough
-            case .ultraHigh:
-                 preset = AVCaptureSession.Preset.high;
-            case .veryHigh:
-                 preset = AVCaptureSession.Preset.hd1920x1080;
-            case .high:
-                 preset = AVCaptureSession.Preset.hd1280x720;
-            case .medium:
-                 preset = AVCaptureSession.Preset.vga640x480;
-            case .low:
-                 preset = AVCaptureSession.Preset.cif352x288;
-            default:
-                preset = AVCaptureSession.Preset.low
-            }
-            return preset
-    }
-
     
     private func captureNative(_ result: @escaping FlutterResult) {
         let settings = AVCapturePhotoSettings()
@@ -378,7 +380,6 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         dateFormatter.dateFormat = IMAGE_FILE_NAME_DATE_FORMAT
         let fileName = dateFormatter.string(from: Date())
         let path = "\(tempDirectory.path)/\(fileName)\(IMAGE_FILE_EXTENSION)"
-        print(path)
         return path
     }
 }

@@ -11,3 +11,4 @@ export 'src/capture_mode.dart';
 export 'src/flash_mode.dart';
 export 'src/resolution_preset.dart';
 export 'src/torch_state.dart';
+export 'src/rotation.dart';
