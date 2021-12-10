@@ -40,9 +40,10 @@ abstract class CameraController {
     CameraLensDirection facing = CameraLensDirection.back,
     ResolutionPreset resolutionPreset = ResolutionPreset.max,
     CaptureMode captureMode = CaptureMode.maxQuality,
+    Rotation rotation = Rotation.rotationUnset,
     FlashMode? flashMode,
   }) =>
-      _CameraController(facing, cameraType, resolutionPreset, Rotation.rotationUnset, captureMode, flashMode);
+      _CameraController(facing, cameraType, resolutionPreset, rotation, captureMode, flashMode);
 
   /// Start the camera asynchronously.
   Future<void> startAsync();
