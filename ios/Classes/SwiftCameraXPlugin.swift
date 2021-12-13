@@ -384,6 +384,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     }
 }
 
+@available(iOS 11.0, *)
 public class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
     private(set) var path: String = ""
     private(set) var onCaptureFinished: () -> Void = {}
