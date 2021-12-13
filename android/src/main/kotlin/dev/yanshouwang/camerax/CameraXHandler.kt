@@ -32,7 +32,7 @@ enum class ResolutionPreset(val value: Int) {
     }
 }
 
-enum class ImageRotation(val value: Int) {
+enum class PhotoRotation(val value: Int) {
     ROTATION_0(0),
     ROTATION_90(1),
     ROTATION_180(2),
@@ -57,7 +57,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
         private const val CAMERA_INDEX = "camera_index"
         private const val CAMERA_TYPE = "camera_type"
         private const val CAMERA_RESOLUTION = "camera_resolution"
-        private const val CAMERA_ROTATION = "camera_rotation"
+        private const val CAMERA_ROTATION = "camera_photo_rotation"
         private const val CAMERA_CAPTURE_MODE = "camera_capture_mode"
         private const val CAMERA_FLASH_MODE = "camera_flash_mode"
     }
@@ -76,7 +76,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private var captureMode = ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
     private var flashMode = ImageCapture.FLASH_MODE_AUTO
     private var targetResolution = Size(720, 1280)
-    private var targetRotation = ImageRotation.ROTATION_UNSET
+    private var targetRotation = PhotoRotation.ROTATION_UNSET
 
     @ExperimentalGetImage
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
@@ -150,7 +150,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
             resolutionPreset?.let {
                 this.targetResolution = targetResolution(ResolutionPreset.fromInt(it))
             }
-            targetRotation?.let { this.targetRotation = ImageRotation.fromInt(it) }
+            targetRotation?.let { this.targetRotation = PhotoRotation.fromInt(it) }
             val selector = CameraSelector.Builder().requireLensFacing(facingIndex).build()
             when (CameraType.values()[cameraType]) {
                 CameraType.PICTURE -> prepareCapture(result, selector)
@@ -184,7 +184,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
                 .setTargetResolution(targetResolution)
                 .build()
 
-            if (targetRotation != ImageRotation.ROTATION_UNSET) {
+            if (targetRotation != PhotoRotation.ROTATION_UNSET) {
                 imageCapture.targetRotation = targetRotation.value
             }
             initCamera(cameraProvider, executor, selector, imageCapture)

@@ -22,6 +22,18 @@ enum CameraType : String {
     case barcode = "barcode"
 }
 
+enum CameraRotation : Int {
+    case rotation0 = 0
+    case rotation90 = 1
+    case rotation180 = 2
+    case rotation270 = 3
+    case rotationUnset = 4
+    
+    init(fromRawValue: Int) {
+        self = CameraRotation(rawValue: fromRawValue) ?? .rotationUnset
+    }
+}
+
 public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     private let IMAGE_FILE_EXTENSION = ".jpg"
@@ -31,6 +43,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     private let CAMERA_TYPE = "camera_type"
     private let CAMERA_RESOLUTION = "camera_resolution"
     private let CAMERA_FLASH_MODE = "camera_flash_mode"
+    private let CAMERA_ROTATION = "camera_rotation"
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = SwiftCameraXPlugin(registrar.textures())
@@ -54,12 +67,14 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     var analyzing: Bool
     var flashMode: AVCaptureDevice.FlashMode
     var resolutionPreset: AVCaptureSession.Preset!
+    var videoOrientation: AVCaptureVideoOrientation
     
     init(_ registry: FlutterTextureRegistry) {
         self.registry = registry
         analyzeMode = 0
         analyzing = false
-        flashMode = AVCaptureDevice.FlashMode.auto
+        flashMode = .auto
+        videoOrientation = .portrait
         super.init()
     }
     
@@ -153,11 +168,15 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             if let flashMode = args[CAMERA_FLASH_MODE] as? Int {
                 self.flashMode = mapFlashMode(flashMode)
             }
-            
             if let resolutionPreset = args[CAMERA_RESOLUTION] as? Int {
                 self.resolutionPreset = mapResolutionPreset(resolutionPreset)
             }
-            
+//            Unsupported for now because this rotates the preview not a captured image
+//            to apply to photo capture, it should probably be set through but currently no connection is set to photoOutput
+//            photoOutput.connection(with: <#T##AVMediaType#>)?.videoOrientation
+//            if let photoRotation = args[CAMERA_ROTATION] as? Int {
+//                self.photoRotation = mapPhotoOrientation(photoRotation)
+//            }
             setupDevice(position, result)
             
             switch (type) {
@@ -233,7 +252,7 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
                 setupResolution()
                 
                 let connection = AVCaptureConnection(inputPorts: input.ports, output: videoOutput)
-                connection.videoOrientation = .portrait
+                connection.videoOrientation = videoOrientation
                 captureSession.addConnection(connection)
                 
                 photoOutput = AVCapturePhotoOutput()
@@ -341,6 +360,20 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         }
     }
     
+    private func mapVideoOrientation(_ rawMode: Int) -> AVCaptureVideoOrientation {
+        switch (CameraRotation(fromRawValue: rawMode)) {
+        case .rotation90:
+            return .landscapeRight
+        case .rotation180:
+            return .portraitUpsideDown
+        case .rotation270:
+            return .landscapeLeft
+        case .rotation0:
+            fallthrough
+        default:
+            return .portrait
+        }
+    }
     
     private func captureNative(_ result: @escaping FlutterResult) {
         let settings = AVCapturePhotoSettings()

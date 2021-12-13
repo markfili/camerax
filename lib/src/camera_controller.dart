@@ -40,7 +40,7 @@ abstract class CameraController {
     CameraLensDirection facing = CameraLensDirection.back,
     ResolutionPreset resolutionPreset = ResolutionPreset.max,
     CaptureMode captureMode = CaptureMode.maxQuality,
-    Rotation rotation = Rotation.rotationUnset,
+    PhotoRotation rotation = PhotoRotation.rotationUnset,
     FlashMode? flashMode,
   }) =>
       _CameraController(facing, cameraType, resolutionPreset, rotation, captureMode, flashMode);
@@ -68,7 +68,7 @@ class _CameraController implements CameraController {
   static const String CAMERA_INDEX = 'camera_index';
   static const String CAMERA_TYPE = 'camera_type';
   static const String CAMERA_RESOLUTION = 'camera_resolution';
-  static const String CAMERA_ROTATION = 'camera_rotation';
+  static const String CAMERA_PHOTO_ROTATION = 'camera_photo_rotation';
   static const String CAMERA_CAPTURE_MODE = 'camera_capture_mode';
   static const String CAMERA_FLASH_MODE = 'camera_flash_mode';
 
@@ -86,7 +86,7 @@ class _CameraController implements CameraController {
   final CameraType cameraType;
   final CaptureMode captureMode;
   final ResolutionPreset resolutionPreset;
-  final Rotation rotation;
+  final PhotoRotation rotation;
   FlashMode? _flashMode;
 
   @override
@@ -178,7 +178,7 @@ class _CameraController implements CameraController {
         CAMERA_INDEX: cameraLensDirection.index,
         CAMERA_TYPE: cameraType.index,
         CAMERA_RESOLUTION: resolutionPreset.index,
-        CAMERA_ROTATION: rotation.index,
+        CAMERA_PHOTO_ROTATION: rotation.index,
         CAMERA_CAPTURE_MODE: captureMode.index,
         CAMERA_FLASH_MODE: flashMode.index,
       });
