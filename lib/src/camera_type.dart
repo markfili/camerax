@@ -1,0 +1,4 @@
+enum CameraType {
+  picture,
+  barcode,
+}
