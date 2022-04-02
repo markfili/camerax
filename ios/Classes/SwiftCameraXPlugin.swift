@@ -1,7 +1,5 @@
 import AVFoundation
 import Flutter
-import MLKitVision
-import MLKitBarcodeScanning
 import UIKit
 
 enum ResolutionPreset : Int {
@@ -88,8 +86,6 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             startNative(call, result)
         case "torch":
             torchNative(call, result)
-        case "analyze":
-            analyzeNative(call, result)
         case "stop":
             stopNative(result)
         case "flash":
@@ -116,33 +112,6 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             return nil
         }
         return Unmanaged<CVPixelBuffer>.passRetained(latestBuffer)
-    }
-    
-    public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        latestBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-        registry.textureFrameAvailable(textureId)
-        
-        switch analyzeMode {
-        case 1: // barcode
-            if analyzing {
-                break
-            }
-            analyzing = true
-            let buffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-            let image = VisionImage(image: buffer!.image)
-            let scanner = BarcodeScanner.barcodeScanner()
-            scanner.process(image) { [self] barcodes, error in
-                if error == nil && barcodes != nil {
-                    for barcode in barcodes! {
-                        let event: [String: Any?] = ["name": "barcode", "data": barcode.data]
-                        sink?(event)
-                    }
-                }
-                analyzing = false
-            }
-        default: // none
-            break
-        }
     }
     
     func stateNative(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -180,10 +149,10 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
             setupDevice(position, result)
             
             switch (type) {
-            case .barcode:
-                setupBarcodeCapturing(result)
             case .picture:
                 setupPictureCapturing(result)
+            default:
+                result(FlutterError.init(code: "Unsupported camera type \(type)", message: "Check supported values in CameraType or active project branch", details: nil))
             }
             
             textureId = registry.register(self)
@@ -202,36 +171,6 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         let size = ["width": width, "height": height]
         let answer: [String : Any?] = ["textureId": textureId, "size": size, "torchable": captureDevice.hasTorch]
         result(answer)
-    }
-    
-    private func setupBarcodeCapturing(_ result: @escaping FlutterResult) {
-        captureSession = AVCaptureSession()
-        captureSession.beginConfiguration()
-        
-        setupResolution()
-        
-        // Add device input.
-        do {
-            let input = try AVCaptureDeviceInput(device: captureDevice)
-            captureSession.addInput(input)
-        } catch {
-            error.throwNative(result)
-        }
-        
-        // Add video output.
-        let videoOutput = AVCaptureVideoDataOutput()
-        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue.main)
-        captureSession.addOutput(videoOutput)
-        for connection in videoOutput.connections {
-            connection.videoOrientation = .portrait
-            if captureDevice.position == .front && connection.isVideoMirroringSupported {
-                connection.isVideoMirrored = true
-            }
-        }
-        captureSession.commitConfiguration()
-        captureSession.startRunning()
     }
     
     private func setupPictureCapturing(_ result: @escaping FlutterResult) {
@@ -302,11 +241,6 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         } catch {
             error.throwNative(result)
         }
-    }
-    
-    func analyzeNative(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-        analyzeMode = call.arguments as! Int
-        result(nil)
     }
     
     func stopNative(_ result: FlutterResult) {
@@ -383,15 +317,18 @@ public class SwiftCameraXPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
         }
         
         let path = createPhotoPath()
-        
-        let delegate = PhotoCaptureDelegate().initWithPath(
-            onCaptureFinished:  {() -> Void in
-                result(["path": path])
-            }, onCaptureFailed: {(error) -> Void in
-                error.throwNative(result)
-            }, path)
-        
-        photoOutput.capturePhoto(with: settings, delegate: delegate)
+        if #available(iOS 11, *) {
+            let delegate = PhotoCaptureDelegate().initWithPath(
+                onCaptureFinished:  {() -> Void in
+                    result(["path": path])
+                }, onCaptureFailed: {(error) -> Void in
+                    error.throwNative(result)
+                }, path)
+            
+            photoOutput.capturePhoto(with: settings, delegate: delegate)
+        } else {
+            result(FlutterError.init(code: "Wrong iOs version", message: "Capturing photo supported on iOs version greater than 11", details: nil))
+        }
     }
     
     public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
