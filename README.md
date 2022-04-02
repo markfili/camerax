@@ -1,5 +1,7 @@
 # CameraX
 
+## THIS BRANCH - camera-only - IS FOR TAKING PICTURES ONLY, BARCODE IS STILL AVAILABLE IN THE main REPO BRANCH
+
 A camera plugin for flutter, which uses CameraX on Android, native API (AVFoundation) on iOS, supports camera preview, capture and analyze.
 This is a fork of the [CameraX Flutter plugin](https://github.com/yanshouwang/camerax) but with added photo capture ability.
 
@@ -12,7 +14,7 @@ This is a fork of the [CameraX Flutter plugin](https://github.com/yanshouwang/ca
 - [ ] Access to a text stream.
 - [ ] Access to a face stream.
 - [ ] Access to a pose stream.
-- [x] Access to a barcode stream.
+- [ ] Access to a barcode stream.
 - [ ] Access to image labels stream.
 - [ ] Access to a object detection and tracking stream.
 - [ ] Access to a digital ink recoginition stream.

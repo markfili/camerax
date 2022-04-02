@@ -11,7 +11,7 @@ class HomeView extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(40.0),
           child: Text(
-            'Use the:\n- camera button to take picture\n- qr code button to scan',
+            'Use the:\n- camera button to take picture',
             style: TextStyle(fontSize: 20.0),
           ),
         ),
@@ -25,12 +25,6 @@ class HomeView extends StatelessWidget {
               onPressed: () => Navigator.of(context).pushNamed('capture'),
               icon: Icon(
                 Icons.camera,
-              ),
-            ),
-            IconButton(
-              onPressed: () => Navigator.of(context).pushNamed('analyze'),
-              icon: Icon(
-                Icons.qr_code,
               ),
             ),
           ],

@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.annotation.IntDef
@@ -15,9 +14,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.common.InputImage
-import io.flutter.plugin.common.*
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.PluginRegistry
 import io.flutter.view.TextureRegistry
 import java.io.File
 import java.text.SimpleDateFormat
@@ -45,8 +45,8 @@ enum class PhotoRotation(val value: Int) {
 }
 
 class CameraXHandler(private val activity: Activity, private val textureRegistry: TextureRegistry) :
-    MethodChannel.MethodCallHandler, EventChannel.StreamHandler,
-    PluginRegistry.RequestPermissionsResultListener {
+        MethodChannel.MethodCallHandler, EventChannel.StreamHandler,
+        PluginRegistry.RequestPermissionsResultListener {
 
     companion object {
         private const val REQUEST_CODE = 19930430
@@ -102,9 +102,9 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>?,
-        grantResults: IntArray?
+            requestCode: Int,
+            permissions: Array<out String>?,
+            grantResults: IntArray?
     ): Boolean {
         return listener?.onRequestPermissionsResult(requestCode, permissions, grantResults) ?: false
     }
@@ -112,12 +112,12 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun stateNative(result: MethodChannel.Result) {
         // Can't get exact denied or not_determined state without request. Just return not_determined when state isn't authorized
         val state =
-            if (ContextCompat.checkSelfPermission(
-                    activity,
-                    Manifest.permission.CAMERA
-                ) == PackageManager.PERMISSION_GRANTED
-            ) 1
-            else 0
+                if (ContextCompat.checkSelfPermission(
+                                activity,
+                                Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+                ) 1
+                else 0
         result.success(state)
     }
 
@@ -140,7 +140,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun startNative(call: MethodCall, result: MethodChannel.Result) {
         try {
             val facingIndex: Int = call.argument<Int>(CAMERA_INDEX)!!
-            val cameraType: Int = call.argument<Int>(CAMERA_TYPE)!!
+            val cameraTypeIndex: Int = call.argument<Int>(CAMERA_TYPE)!!
             val captureMode: Int? = call.argument<Int>(CAMERA_CAPTURE_MODE)
             val flashMode: Int? = call.argument<Int>(CAMERA_FLASH_MODE)
             val resolutionPreset: Int? = call.argument<Int>(CAMERA_RESOLUTION)
@@ -152,26 +152,25 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
             }
             targetRotation?.let { this.targetRotation = PhotoRotation.fromInt(it) }
             val selector = CameraSelector.Builder().requireLensFacing(facingIndex).build()
-            when (CameraType.values()[cameraType]) {
+            when (val cameraType: CameraType = CameraType.values()[cameraTypeIndex]) {
                 CameraType.PICTURE -> prepareCapture(result, selector)
-                CameraType.BARCODE -> prepareBarCode(result, selector)
                 else -> result.error(
-                    "Unsupported camera type",
-                    "CameraType must be one of CameraType options",
-                    null
+                        "Unsupported camera type $cameraType",
+                        "CameraType must be one of CameraType options",
+                        "Check CameraX plugin repository and use appropriate branch"
                 )
             }
         } catch (e: NullPointerException) {
             result.error(
-                "Unsupported setup",
-                "Missing or unsupported values for CameraType or CameraLensFacing index",
-                e.message
+                    "Unsupported setup",
+                    "Missing or unsupported values for CameraType or CameraLensFacing index",
+                    e.message
             )
         } catch (e: ClassCastException) {
             result.error(
-                "Unsupported types",
-                "Values must be sent in a correct format or type",
-                e.message
+                    "Unsupported types",
+                    "Values must be sent in a correct format or type",
+                    e.message
             )
         }
     }
@@ -179,10 +178,10 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun prepareCapture(result: MethodChannel.Result, camSelector: CameraSelector) {
         execute(result, camSelector) { cameraProvider, selector, executor ->
             imageCapture = ImageCapture.Builder()
-                .setCaptureMode(captureMode)
-                .setFlashMode(flashMode)
-                .setTargetResolution(targetResolution)
-                .build()
+                    .setCaptureMode(captureMode)
+                    .setFlashMode(flashMode)
+                    .setTargetResolution(targetResolution)
+                    .build()
 
             if (targetRotation != PhotoRotation.ROTATION_UNSET) {
                 imageCapture.targetRotation = targetRotation.value
@@ -191,30 +190,10 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
         }
     }
 
-    @ExperimentalGetImage
-    private fun prepareBarCode(
-        result: MethodChannel.Result,
-        camSelector: CameraSelector
-    ) {
-        execute(result, camSelector) { cameraProvider, selector, executor ->
-            val analyzer = barcodeAnalyzer()
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build().apply { setAnalyzer(executor, analyzer) }
-
-            val preview = initCamera(cameraProvider, executor, selector, analysis)
-            camera?.cameraInfo?.torchState?.observe(activity as LifecycleOwner, { state ->
-                val event = mapOf("name" to "torchState", "data" to state)
-                sink?.success(event)
-            })
-            preview
-        }
-    }
-
     private fun execute(
-        result: MethodChannel.Result,
-        selector: CameraSelector,
-        prepare: (cameraProvider: ProcessCameraProvider, selector: CameraSelector, executor: Executor) -> Preview
+            result: MethodChannel.Result,
+            selector: CameraSelector,
+            prepare: (cameraProvider: ProcessCameraProvider, selector: CameraSelector, executor: Executor) -> Preview
     ) {
         val future = ProcessCameraProvider.getInstance(activity)
         val executor = ContextCompat.getMainExecutor(activity)
@@ -225,10 +204,10 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     }
 
     private fun initCamera(
-        cameraProvider: ProcessCameraProvider,
-        executor: Executor,
-        selector: CameraSelector,
-        useCase: UseCase
+            cameraProvider: ProcessCameraProvider,
+            executor: Executor,
+            selector: CameraSelector,
+            useCase: UseCase
     ): Preview {
         this.cameraProvider = cameraProvider
         textureEntry = textureRegistry.createSurfaceTexture()
@@ -238,15 +217,15 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
             val texture = textureEntry!!.surfaceTexture()
             texture.setDefaultBufferSize(resolution.width, resolution.height)
             val surface = Surface(texture)
-            request.provideSurface(surface, executor, { })
+            request.provideSurface(surface, executor) { }
         }
 
         val preview = Preview.Builder().build().apply { setSurfaceProvider(surfaceProvider) }
         camera = cameraProvider.bindToLifecycle(
-            activity as LifecycleOwner,
-            selector,
-            preview,
-            useCase
+                activity as LifecycleOwner,
+                selector,
+                preview,
+                useCase
         )
         return preview
     }
@@ -254,33 +233,33 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun captureNative(result: MethodChannel.Result) {
         val outputFile = createFile()
         val outputConfig = ImageCapture.OutputFileOptions.Builder(outputFile)
-            .build()
+                .build()
         val cameraExecutor = ContextCompat.getMainExecutor(activity)
         imageCapture.flashMode = flashMode
         imageCapture.takePicture(
-            outputConfig,
-            cameraExecutor,
-            onImageSavedCallback(result)
+                outputConfig,
+                cameraExecutor,
+                onImageSavedCallback(result)
         )
     }
 
     private fun onImageSavedCallback(result: MethodChannel.Result) =
-        object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                result.success(mapOf("path" to outputFileResults.savedUri?.path))
-            }
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    result.success(mapOf("path" to outputFileResults.savedUri?.path))
+                }
 
-            override fun onError(exception: ImageCaptureException) {
-                result.error(
-                    "Capture Error code ${exception.imageCaptureError}",
-                    exception.message,
-                    null
-                )
+                override fun onError(exception: ImageCaptureException) {
+                    result.error(
+                            "Capture Error code ${exception.imageCaptureError}",
+                            exception.message,
+                            null
+                    )
+                }
             }
-        }
 
     private fun answers(
-        preview: Preview,
+            preview: Preview,
     ): Map<String, Any> {
         // TODO: seems there's not a better way to get the final resolution
         @SuppressLint("RestrictedApi")
@@ -289,13 +268,13 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
         val width = resolution.width.toDouble()
         val height = resolution.height.toDouble()
         val size = if (portrait) mapOf(
-            "width" to width,
-            "height" to height
+                "width" to width,
+                "height" to height
         ) else mapOf("width" to height, "height" to width)
         return mapOf(
-            "textureId" to textureEntry?.id()!!,
-            "size" to size,
-            "torchable" to camera!!.torchable
+                "textureId" to textureEntry?.id()!!,
+                "size" to size,
+                "torchable" to camera!!.torchable
         )
     }
 
@@ -333,30 +312,6 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
         result.success(null)
     }
 
-    @ExperimentalGetImage
-    private fun barcodeAnalyzer() = ImageAnalysis.Analyzer { imageProxy -> // YUV_420_888 format
-        when (analyzeMode) {
-            AnalyzeMode.BARCODE -> {
-                val mediaImage = imageProxy.image ?: return@Analyzer
-                val inputImage = InputImage.fromMediaImage(
-                    mediaImage,
-                    imageProxy.imageInfo.rotationDegrees
-                )
-                val scanner = BarcodeScanning.getClient()
-                scanner.process(inputImage)
-                    .addOnSuccessListener { barcodes ->
-                        for (barcode in barcodes) {
-                            val event = mapOf("name" to "barcode", "data" to barcode.data)
-                            sink?.success(event)
-                        }
-                    }
-                    .addOnFailureListener { e -> Log.e(TAG, e.message, e) }
-                    .addOnCompleteListener { imageProxy.close() }
-            }
-            else -> imageProxy.close()
-        }
-    }
-
     /**
      * Returns a Size for selected resolution preset.
      * Any unknown preset defaults to MAX.
@@ -374,7 +329,7 @@ class CameraXHandler(private val activity: Activity, private val textureRegistry
     private fun createFile(): File {
         val baseFolder = getOutputDirectory(activity)
         return File(
-            baseFolder, SimpleDateFormat(IMAGE_FILE_NAME_DATE_FORMAT, Locale.US)
+                baseFolder, SimpleDateFormat(IMAGE_FILE_NAME_DATE_FORMAT, Locale.US)
                 .format(System.currentTimeMillis()) + IMAGE_FILE_EXTENSION
         )
     }
